@@ -88,6 +88,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -336,12 +342,14 @@ dependencies = [
 name = "mrc-to-tiff"
 version = "0.1.0"
 dependencies = [
+ "byteorder",
  "clap",
  "env_logger",
  "log",
  "mrc",
  "rayon",
  "tiff",
+ "tiff-encoder",
 ]
 
 [[package]]
@@ -493,6 +501,15 @@ dependencies = [
  "quick-error",
  "weezl",
  "zune-jpeg",
+]
+
+[[package]]
+name = "tiff-encoder"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bedeb4ce8d59fedc88d6250a892d31dcbed4ea60a8c082e6a88be893f7958464"
+dependencies = [
+ "byteorder",
 ]
 
 [[package]]
