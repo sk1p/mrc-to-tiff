@@ -330,12 +330,12 @@ dependencies = [
 
 [[package]]
 name = "mrc"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0406e5635249657d83f667f7a0d84d786e3084a41f6d05c1f06ad9e448defd01"
+version = "0.2.0"
+source = "git+https://github.com/elemeng/mrc.git?rev=cebd1d0#cebd1d074784d0775a01576c8e5b5345ed0a7494"
 dependencies = [
  "bytemuck",
  "memmap2",
+ "thiserror",
 ]
 
 [[package]]
@@ -487,6 +487,26 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

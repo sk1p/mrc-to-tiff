@@ -21,7 +21,7 @@ impl<'a> Volume3D<'a> {
 
         let slice_size = self.nx * self.ny;
         let start = z * slice_size;
-        let ints = self.view.view::<i16>()?;
+        let ints = self.view.data.as_i16_slice()?;
 
         ints.get(start..start + slice_size)
             .ok_or(mrc::Error::InvalidDimensions)

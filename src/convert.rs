@@ -14,7 +14,7 @@ pub fn convert(mrc_path: PathBuf, dest_path: PathBuf, endianess: ArgEndianess) -
 
     let view = data.read_view()?;
 
-    let ints = view.view::<i16>()?;
+    let ints = view.data.as_i16_slice()?;
     info!("len of slice: {}", ints.len());
 
     info!("endianess: {:?}", endianess);
