@@ -1,8 +1,14 @@
-use std::{error::Error, fs::File, path::Path};
+use std::{error::Error, fs::File, path::{Path, PathBuf}};
 
 use byteorder::{BigEndian, WriteBytesExt};
 use tiff::encoder::{TiffEncoder, colortype};
 use tiff_encoder::{LONG, RATIONAL, SHORT, TiffFile, ifd::{Ifd, tags}, write::ByteBlock};
+
+#[derive(Debug, thiserror::Error)]
+enum WriteError {
+    #[error("file {path:?} already exists")]
+    FileAlreadyExists { path: PathBuf },
+}
 
 
 pub fn write_tiff_native_endian(
@@ -11,6 +17,9 @@ pub fn write_tiff_native_endian(
     width: usize,
     height: usize,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
+    if filename.exists() {
+        return Err(Box::new(WriteError::FileAlreadyExists { path: filename.to_owned() }));
+    }
     let mut out_file = File::create_new(filename)?;
     let mut tiff = TiffEncoder::new(&mut out_file)?;
     tiff.write_image::<colortype::GrayI16>(width as u32, height as u32, data)?;
@@ -23,6 +32,9 @@ pub fn write_tiff_big_endian(
     width: usize,
     height: usize,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
+    if filename.exists() {
+        return Err(Box::new(WriteError::FileAlreadyExists { path: filename.to_owned() }));
+    }
     let mut image_bytes: Vec<u8> = Vec::with_capacity(width * height * 2);
     for value in data.iter() {
         image_bytes.write_i16::<BigEndian>(*value)?;

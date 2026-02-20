@@ -1,12 +1,24 @@
 use std::{error::Error, path::PathBuf};
 
-use log::info;
+use indicatif::{MultiProgress, ParallelProgressIterator, ProgressBar};
+use log::{debug, info};
 use mrc::MrcMmap;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use crate::{ArgEndianess, read::Volume3D, write::{write_tiff_big_endian, write_tiff_native_endian}};
+use crate::{
+    ArgEndianess,
+    read::Volume3D,
+    write::{write_tiff_big_endian, write_tiff_native_endian},
+};
 
-pub fn convert(mrc_path: PathBuf, dest_path: PathBuf, endianess: ArgEndianess) -> Result<(), Box<dyn Error + Sync + Send>> {
+pub fn convert(
+    mrc_path: PathBuf,  // 3d, 16bit
+    dest_path: PathBuf,  // directory
+    endianess: ArgEndianess,  // tif output endianess
+    start_at_frame: usize,  // 1-indexed
+    stop_at_frame: Option<usize>, // 1-indexed, last frame if not given
+    multi_progress: &MultiProgress,
+) -> Result<(), Box<dyn Error + Sync + Send>> {
     let data = MrcMmap::open(mrc_path)?;
 
     let (nx, ny, nz) = data.read_view()?.dimensions();
@@ -15,16 +27,28 @@ pub fn convert(mrc_path: PathBuf, dest_path: PathBuf, endianess: ArgEndianess) -
     let view = data.read_view()?;
 
     let ints = view.data.as_i16_slice()?;
-    info!("len of slice: {}", ints.len());
+    debug!("len of slice: {}", ints.len());
 
     info!("endianess: {:?}", endianess);
 
+    let start = start_at_frame - 1;
+    let stop = stop_at_frame.unwrap_or(nz);
+
+    assert!(start <= stop);
+
+
     let volume = Volume3D::new(view)?;
-    let res: Result<Vec<()>, _> = (0..nz)
+    let idxs: Vec<usize> = (start..stop).collect();
+    let len = idxs.len() as u64;
+    let progress = multi_progress.add(ProgressBar::new(len));
+
+    let res: Result<Vec<()>, _> = idxs
         .into_par_iter()
+        .progress_with(progress.clone())
         .map(|z| -> Result<(), Box<dyn Error + Sync + Send>> {
             let slice = volume.get_slice(z)?;
-            let out_path = dest_path.join(format!("slice_{z:05}.tif"));
+            let idx = z + 1 - start;
+            let out_path = dest_path.join(format!("slice_{idx:05}.tif"));
             match endianess {
                 ArgEndianess::Big => {
                     write_tiff_big_endian(&out_path, slice, nx, ny)?;
@@ -33,11 +57,14 @@ pub fn convert(mrc_path: PathBuf, dest_path: PathBuf, endianess: ArgEndianess) -
                     write_tiff_native_endian(&out_path, slice, nx, ny)?;
                 }
             }
-            info!("created {out_path:?}");
+            debug!("created {out_path:?}");
             Ok(())
         })
         .collect();
     res?;
+
+    progress.finish();
+    multi_progress.remove(&progress);
 
     Ok(())
 }
