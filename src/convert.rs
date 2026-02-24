@@ -6,9 +6,7 @@ use mrc::MrcMmap;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
-    ArgEndianess,
-    read::Volume3D,
-    write::{write_tiff_big_endian, write_tiff_native_endian},
+    common::ArgEndianess, read::Volume3D, write::{write_tiff_big_endian, write_tiff_native_endian}
 };
 
 pub fn convert(

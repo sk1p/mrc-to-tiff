@@ -1,6 +1,8 @@
 mod convert;
 mod read;
 mod write;
+mod render;
+mod common;
 
 use std::{error::Error, path::PathBuf};
 
@@ -8,11 +10,7 @@ use clap::Parser;
 use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
 
-#[derive(Debug, clap::ValueEnum, Clone)]
-enum ArgEndianess {
-    Big,
-    Native,
-}
+use crate::common::ArgEndianess;
 
 #[derive(Parser, Debug)]
 struct Args {
