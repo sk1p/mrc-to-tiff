@@ -1,4 +1,4 @@
-use std::{error::Error, path::PathBuf};
+use std::{error::Error, path::PathBuf, time::Instant};
 
 use indicatif::{MultiProgress, ParallelProgressIterator, ProgressBar};
 use log::{debug, info};
@@ -17,6 +17,8 @@ pub fn convert(
     stop_at_frame: Option<usize>, // 1-indexed, last frame if not given
     multi_progress: &MultiProgress,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
+    let t0 = Instant::now();
+
     let data = MrcMmap::open(mrc_path)?;
 
     let (nx, ny, nz) = data.read_view()?.dimensions();
@@ -33,7 +35,6 @@ pub fn convert(
     let stop = stop_at_frame.unwrap_or(nz);
 
     assert!(start <= stop);
-
 
     let volume = Volume3D::new(view)?;
     let idxs: Vec<usize> = (start..stop).collect();
@@ -63,6 +64,8 @@ pub fn convert(
 
     progress.finish();
     multi_progress.remove(&progress);
+
+    info!("conversion done in {:?}", t0.elapsed());
 
     Ok(())
 }

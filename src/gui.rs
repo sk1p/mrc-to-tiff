@@ -35,8 +35,7 @@ struct WithInputData {
     source_path: PathBuf,
     mmap: MrcMmap,
     slice_position: usize,
-    range_start: usize,
-    range_end: usize,
+    num_frames: usize,
 
     export_start: usize,
     export_end: usize,
@@ -47,16 +46,15 @@ struct WithInputData {
 fn load_data(path: &Path) -> Result<WithInputData, Box<dyn Error>> {
     let mmap = MrcMmap::open(path)?;
     let view = mmap.read_view()?;
-    let range_end = view.dimensions().2;
+    let num_frames = view.dimensions().2;
     Ok(WithInputData {
         source_path: path.to_owned(),
-        range_start: 0,
         slice_position: 0,
-        range_end,
+        num_frames,
         mmap,
         texture: None,
         export_start: 0,
-        export_end: range_end,
+        export_end: num_frames,
     })
 }
 
@@ -108,7 +106,7 @@ impl eframe::App for ConverterApp {
                 let mut slider_value = data.slice_position + 1;
                 ui.add(Slider::new(
                     &mut slider_value,
-                    data.range_start + 1..=data.range_end,
+                    1..=data.num_frames,
                 ));
                 let new_slice_position = slider_value - 1;
                 // slider change detected:
@@ -160,7 +158,7 @@ impl eframe::App for ConverterApp {
                     data.slice_position = data
                         .slice_position
                         .saturating_add(1)
-                        .min(data.range_end - 1);
+                        .min(data.num_frames - 1);
                     data.texture = None;
                 };
 
@@ -171,19 +169,20 @@ impl eframe::App for ConverterApp {
 
                 ui.label("End frame number (inclusive):");
                 let mut export_end_drag = data.export_end + 1;
-                ui.add(DragValue::new(&mut export_end_drag).range(1..=data.range_end));
+                ui.add(DragValue::new(&mut export_end_drag).range(1..=data.num_frames));
                 data.export_end = export_end_drag - 1;
 
                 let multi_progress=  Default::default();
 
                 if let Some(dest_directory) = &self.dest_directory {
                     if ui.button("Export to tiff").clicked() {
+                        info!("converting frames {} to {} to tiff...", data.export_start + 1, data.export_end + 1);
                         convert::convert(
                             data.source_path.clone(),
                             dest_directory.clone(),
                             common::ArgEndianess::Big,
-                            data.export_start,
-                            Some(data.export_end),
+                            data.export_start + 1,
+                            Some(data.export_end + 1),
                             &multi_progress,
                         ).unwrap();
                     }
