@@ -48,6 +48,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
         args.start_at_frame,
         args.stop_at_frame,
         &multi,
+        None,
     )?;
 
     Ok(())

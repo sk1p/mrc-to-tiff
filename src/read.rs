@@ -9,9 +9,9 @@ pub struct Volume3D<'a> {
 }
 
 impl<'a> Volume3D<'a> {
-    pub fn new(view: MrcView<'a>) -> Result<Self, mrc::Error> {
+    pub fn new(view: MrcView<'a>) -> Self {
         let (nx, ny, nz) = view.dimensions();
-        Ok(Self { view, nx, ny, nz })
+        Self { view, nx, ny, nz }
     }
 
     pub fn get_slice(&self, z: usize) -> Result<&[i16], mrc::Error> {
