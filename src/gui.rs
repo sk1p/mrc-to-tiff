@@ -144,7 +144,7 @@ impl eframe::App for ConverterApp {
                         let load_btn = load_btn.fill(egui::Color32::from_rgb(0, 90, 230));
 
                         if ui.add(load_btn).clicked()
-                            && let Some(new_path) = rfd::FileDialog::new().pick_file()
+                            && let Some(new_path) = self.pick_file()
                         {
                             self.input_data = match load_data(&new_path) {
                                 Ok(data) => Some(data),
@@ -162,6 +162,12 @@ impl eframe::App for ConverterApp {
 }
 
 impl ConverterApp {
+    fn pick_file(&self) -> Option<PathBuf> {
+        rfd::FileDialog::new()
+            .add_filter("MRC", &["mrc"])
+            .pick_file()
+    }
+
     fn render_with_data(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::new(
             egui::panel::TopBottomSide::Bottom,
@@ -198,7 +204,7 @@ impl ConverterApp {
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             if ui.button("Load 3D MRC Stack...").clicked()
-                && let Some(new_path) = rfd::FileDialog::new().pick_file()
+                && let Some(new_path) = self.pick_file()
             {
                 self.input_data = match load_data(&new_path) {
                     Ok(data) => Some(data),
