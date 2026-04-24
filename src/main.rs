@@ -3,6 +3,7 @@ mod convert;
 mod read;
 mod render;
 mod write;
+mod datasource;
 
 use std::{
     error::Error,

@@ -6,6 +6,7 @@ use std::{
 };
 
 use clap::Parser;
+use dm3dm4::dataset::DMDataSet;
 use eframe::egui::{self, DragValue, RichText, Slider, Spacing, Style, vec2};
 use egui_plot::{Plot, PlotImage, PlotPoint};
 use indicatif::MultiProgress;
@@ -13,9 +14,14 @@ use indicatif_log_bridge::LogWrapper;
 use log::{error, info};
 use mrc::MrcMmap;
 
-use crate::{convert::ProgressMessage, read::Volume3D, render::render_to_rgb};
+use crate::{
+    convert::ProgressMessage,
+    datasource::{DataSource, DmDataSource, MrcDataSource},
+    render::render_to_rgb,
+};
 mod common;
 mod convert;
+mod datasource;
 mod read;
 mod render;
 mod write;
@@ -46,7 +52,7 @@ struct BgProgress {
 
 struct WithInputData {
     source_path: PathBuf,
-    mmap: MrcMmap,
+    mmap: Box<dyn DataSource>,
     slice_position: usize,
     num_frames: usize,
 
@@ -61,9 +67,18 @@ struct WithInputData {
 }
 
 fn load_data(path: &Path) -> Result<WithInputData, Box<dyn Error>> {
-    let mmap = MrcMmap::open(path)?;
-    let view = mmap.read_view()?;
-    let num_frames = view.dimensions().2;
+    let ext = path.extension().unwrap().to_str().unwrap().to_lowercase();
+    let mmap: Box<dyn DataSource> = if ext == "dm3" || ext == "dm4" {
+        let ds = DMDataSet::load(path).unwrap();
+        let arrs = ds.arrays();
+        let arr = arrs.first().unwrap();
+        Box::new(DmDataSource { src: arr.clone() })
+    } else {
+        Box::new(MrcDataSource {
+            src: MrcMmap::open(path)?,
+        })
+    };
+    let num_frames = mmap.dimensions().2;
     Ok(WithInputData {
         source_path: path.to_owned(),
         slice_position: 0,
@@ -219,8 +234,7 @@ impl ConverterApp {
                 .striped(true)
                 .show(ui, |ui| {
                     if let Some(data) = &mut self.input_data {
-                        let view = data.mmap.read_view().unwrap();
-                        let (nx, ny, nz) = view.dimensions();
+                        let (nx, ny, nz) = data.mmap.dimensions();
                         ui.label("Input path");
                         ui.monospace(data.source_path.to_string_lossy());
                         ui.end_row();
@@ -406,15 +420,12 @@ impl ConverterApp {
                 });
 
             if let Some(data) = &mut self.input_data {
-                let view = data.mmap.read_view().unwrap();
-                let (nx, ny, _nz) = view.dimensions();
+                let (nx, ny, _nz) = data.mmap.dimensions();
 
                 let texture: &egui::TextureHandle = data.texture.get_or_insert_with(|| {
-                    let view = data.mmap.read_view().unwrap();
-                    let volume = Volume3D::new(view);
                     info!("loading slice {}", data.slice_position);
                     let img = render_to_rgb(
-                        volume.get_slice(data.slice_position).unwrap(),
+                        &data.mmap.get_slice(data.slice_position),
                         nx,
                         ny,
                         self.quantile,
