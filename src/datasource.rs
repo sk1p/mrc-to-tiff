@@ -1,6 +1,6 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, error::Error, path::Path};
 
-use dm3dm4::dataset::DMArray;
+use dm3dm4::dataset::{DMArray, DMDataSet};
 use mrc::MrcMmap;
 
 use crate::read::Volume3D;
@@ -15,7 +15,7 @@ pub struct DmDataSource {
 
 pub trait DataSource {
     fn dimensions(&self) -> (usize, usize, usize);
-    fn get_slice(&self, z: usize) -> Cow<'_, [f32]>;
+    fn get_slice(&self, z: usize) -> Cow<'_, [i16]>;
 }
 
 impl DataSource for MrcDataSource {
@@ -24,10 +24,15 @@ impl DataSource for MrcDataSource {
         read_view.dimensions()
     }
 
-    fn get_slice(&self, z: usize) -> Cow<'_, [f32]> {
+    fn get_slice(&self, z: usize) -> Cow<'_, [i16]> {
         let read_view = self.src.read_view().unwrap();
         let volume = Volume3D::new(read_view);
-        volume.get_slice(z).unwrap().iter().map(|item| *item as f32).collect()
+        volume
+            .get_slice(z)
+            .unwrap()
+            .iter()
+            .map(|item| *item as i16)
+            .collect()
     }
 }
 
@@ -37,7 +42,21 @@ impl DataSource for DmDataSource {
         (raw_shape[0], raw_shape[1], raw_shape[2])
     }
 
-    fn get_slice(&self, z: usize) -> Cow<'_, [f32]> {
-        self.src.as_zslice::<f32>(z).unwrap()
+    fn get_slice(&self, z: usize) -> Cow<'_, [i16]> {
+        self.src.as_zslice::<i16>(z).unwrap()
     }
+}
+
+pub fn load_any(path: &Path) -> Result<Box<dyn DataSource + Sync + Send>, Box<dyn Error + Sync + Send>> {
+    let ext = path.extension().unwrap().to_str().unwrap().to_lowercase();
+    Ok(if ext == "dm3" || ext == "dm4" {
+        let ds = DMDataSet::load(path)?;
+        let arrs = ds.arrays();
+        let arr = arrs.first().unwrap();
+        Box::new(DmDataSource { src: arr.clone() })
+    } else {
+        Box::new(MrcDataSource {
+            src: MrcMmap::open(path)?,
+        })
+    })
 }

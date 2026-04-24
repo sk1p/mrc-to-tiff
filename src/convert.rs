@@ -10,13 +10,10 @@ use std::{
 
 use indicatif::{MultiProgress, ParallelProgressIterator, ProgressBar};
 use log::{debug, info};
-use mrc::MrcMmap;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
-    common::ArgEndianess,
-    read::Volume3D,
-    write::{write_tiff_big_endian, write_tiff_native_endian},
+    common::ArgEndianess, datasource::load_any, write::{write_tiff_big_endian, write_tiff_native_endian}
 };
 
 #[derive(Debug)]
@@ -37,15 +34,10 @@ pub fn convert(
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let t0 = Instant::now();
 
-    let data = MrcMmap::open(mrc_path)?;
+    let data = load_any(&mrc_path)?;
 
-    let (nx, ny, nz) = data.read_view()?.dimensions();
+    let (nx, ny, nz) = data.dimensions();
     info!("dimensions: {nz}x{ny}x{nx}");
-
-    let view = data.read_view()?;
-
-    let ints = view.data.as_i16_slice()?;
-    debug!("len of slice: {}", ints.len());
 
     info!("endianess: {:?}", endianess);
 
@@ -54,7 +46,6 @@ pub fn convert(
 
     assert!(start <= stop);
 
-    let volume = Volume3D::new(view);
     let idxs: Vec<usize> = (start..stop).collect();
     let len = idxs.len() as u64;
     let progress = multi_progress.add(ProgressBar::new(len));
@@ -66,15 +57,15 @@ pub fn convert(
         .into_par_iter()
         .progress_with(progress.clone())
         .map(|z| -> Result<(), Box<dyn Error + Sync + Send>> {
-            let slice = volume.get_slice(z)?;
+            let slice = data.get_slice(z);
             let idx = z + 1 - start;
             let out_path = dest_path.join(format!("slice_{idx:05}.tif"));
             match endianess {
                 ArgEndianess::Big => {
-                    write_tiff_big_endian(&out_path, slice, nx, ny)?;
+                    write_tiff_big_endian(&out_path, &slice, nx, ny)?;
                 }
                 ArgEndianess::Native => {
-                    write_tiff_native_endian(&out_path, slice, nx, ny)?;
+                    write_tiff_native_endian(&out_path, &slice, nx, ny)?;
                 }
             }
             done.fetch_add(1, Ordering::SeqCst);

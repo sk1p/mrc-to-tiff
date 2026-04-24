@@ -9,8 +9,8 @@ fn get_quantile(data: &[f32], q: f32) -> f32 {
     data[idx_for_q]
 }
 
-pub fn render_to_rgb(data: &[f32], nx: usize, ny: usize, quantile: f32) -> ColorImage {
-    let (vmin, vmax) = &data.iter().fold((f32::MAX, f32::MIN), |a, &b| {
+pub fn render_to_rgb(data: &[i16], nx: usize, ny: usize, quantile: f32) -> ColorImage {
+    let (vmin, vmax) = &data.iter().fold((i16::MAX, i16::MIN), |a, &b| {
         (a.0.min(b), a.1.max(b))
     });
 

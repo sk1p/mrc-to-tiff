@@ -6,17 +6,15 @@ use std::{
 };
 
 use clap::Parser;
-use dm3dm4::dataset::DMDataSet;
 use eframe::egui::{self, DragValue, RichText, Slider, Spacing, Style, vec2};
 use egui_plot::{Plot, PlotImage, PlotPoint};
 use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
 use log::{error, info};
-use mrc::MrcMmap;
 
 use crate::{
     convert::ProgressMessage,
-    datasource::{DataSource, DmDataSource, MrcDataSource},
+    datasource::{DataSource, load_any},
     render::render_to_rgb,
 };
 mod common;
@@ -67,17 +65,7 @@ struct WithInputData {
 }
 
 fn load_data(path: &Path) -> Result<WithInputData, Box<dyn Error>> {
-    let ext = path.extension().unwrap().to_str().unwrap().to_lowercase();
-    let mmap: Box<dyn DataSource> = if ext == "dm3" || ext == "dm4" {
-        let ds = DMDataSet::load(path).unwrap();
-        let arrs = ds.arrays();
-        let arr = arrs.first().unwrap();
-        Box::new(DmDataSource { src: arr.clone() })
-    } else {
-        Box::new(MrcDataSource {
-            src: MrcMmap::open(path)?,
-        })
-    };
+    let mmap = load_any(path).unwrap();
     let num_frames = mmap.dimensions().2;
     Ok(WithInputData {
         source_path: path.to_owned(),
@@ -426,8 +414,8 @@ impl ConverterApp {
                     info!("loading slice {}", data.slice_position);
                     let img = render_to_rgb(
                         &data.mmap.get_slice(data.slice_position),
-                        nx,
                         ny,
+                        nx,
                         self.quantile,
                     );
                     ui.ctx()
