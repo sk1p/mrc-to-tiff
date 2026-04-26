@@ -2,8 +2,7 @@ use std::{
     error::Error,
     path::PathBuf,
     sync::{
-        atomic::{AtomicUsize, Ordering},
-        mpsc::Sender,
+        Arc, atomic::{AtomicUsize, Ordering}, mpsc::Sender
     },
     time::Instant,
 };
@@ -13,7 +12,7 @@ use log::{debug, info};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
-    common::ArgEndianess, datasource::load_any, write::{write_tiff_big_endian, write_tiff_native_endian}
+    common::OutputEndianess, datasource::DataSource, write::write_tiff
 };
 
 #[derive(Debug)]
@@ -24,9 +23,9 @@ pub enum ProgressMessage {
 }
 
 pub fn convert(
-    mrc_path: PathBuf,            // 3d, 16bit
+    data: Arc<Box<dyn DataSource>>,    // 3d, 16bit
     dest_path: PathBuf,           // directory
-    endianess: ArgEndianess,      // tif output endianess
+    endianess: OutputEndianess,      // tif output endianess
     start_at_frame: usize,        // 1-indexed
     stop_at_frame: Option<usize>, // 1-indexed, last frame if not given
     multi_progress: &MultiProgress,
@@ -60,14 +59,7 @@ pub fn convert(
             let slice = data.get_slice(z);
             let idx = z + 1 - start;
             let out_path = dest_path.join(format!("slice_{idx:05}.tif"));
-            match endianess {
-                ArgEndianess::Big => {
-                    write_tiff_big_endian(&out_path, &slice, nx, ny)?;
-                }
-                ArgEndianess::Native => {
-                    write_tiff_native_endian(&out_path, &slice, nx, ny)?;
-                }
-            }
+            write_tiff(&out_path, &slice, nx, ny, endianess)?;
             done.fetch_add(1, Ordering::SeqCst);
             if let Some(prog_q) = &progress_q {
                 prog_q

@@ -8,7 +8,7 @@ mod datasource;
 use std::{
     error::Error,
     io::{Cursor, Seek},
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, sync::Arc,
 };
 
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -18,7 +18,7 @@ use indicatif_log_bridge::LogWrapper;
 use log::{debug, info, warn};
 use mrc::MrcMmap;
 
-use crate::common::ArgEndianess;
+use crate::{common::OutputEndianess, datasource::load_any};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -38,7 +38,7 @@ struct Args {
 
     /// The endianess of the tiff files that are written.
     #[arg(short, long, default_value = "big")]
-    endianess: ArgEndianess,
+    endianess: OutputEndianess,
 
     /// Only output information about the MRC input file
     #[arg(short, long)]
@@ -213,8 +213,9 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
     if args.info_only {
         dump_mrc_info(&args.mrc_path)?;
     } else {
+        let input_data = Arc::new(load_any(&args.mrc_path)?);
         convert::convert(
-            args.mrc_path,
+            Arc::clone(&input_data),
             args.dest_path,
             args.endianess,
             args.start_at_frame,

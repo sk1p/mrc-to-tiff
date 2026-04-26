@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     path::{Path, PathBuf},
-    sync::mpsc::{self, Receiver, RecvTimeoutError},
+    sync::{Arc, mpsc::{self, Receiver, RecvTimeoutError}},
     time::Duration,
 };
 
@@ -50,7 +50,7 @@ struct BgProgress {
 
 struct WithInputData {
     source_path: PathBuf,
-    mmap: Box<dyn DataSource>,
+    mmap: Arc<Box<dyn DataSource>>,
     slice_position: usize,
     num_frames: usize,
 
@@ -64,14 +64,14 @@ struct WithInputData {
     background_progress_nums: Option<BgProgress>,
 }
 
-fn load_data(path: &Path) -> Result<WithInputData, Box<dyn Error>> {
-    let mmap = load_any(path).unwrap();
+fn load_data(path: &Path) -> Result<WithInputData, Box<dyn Error + Sync + Send>> {
+    let mmap = load_any(path)?;
     let num_frames = mmap.dimensions().2;
     Ok(WithInputData {
         source_path: path.to_owned(),
         slice_position: 0,
         num_frames,
-        mmap,
+        mmap: Arc::new(mmap),
         texture: None,
         export_start: 0,
         export_end: num_frames,
@@ -329,16 +329,17 @@ impl ConverterApp {
                                 let (snd, rcv) = mpsc::channel::<ProgressMessage>();
                                 data.background_progress = Some(rcv);
 
-                                let source_path = data.source_path.clone();
                                 let dest_directory = dest_directory.clone();
                                 let export_start = data.export_start;
                                 let export_end = data.export_end;
 
+                                let bg_data = Arc::clone(&data.mmap);
+
                                 std::thread::spawn(move || {
                                     if let Err(e) = convert::convert(
-                                        source_path,
+                                        bg_data,
                                         dest_directory,
-                                        common::ArgEndianess::Big,
+                                        common::OutputEndianess::Big,
                                         export_start + 1,
                                         Some(export_end + 1),
                                         &multi_progress,

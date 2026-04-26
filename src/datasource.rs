@@ -13,9 +13,9 @@ pub struct DmDataSource {
     pub src: DMArray,
 }
 
-pub trait DataSource {
+pub trait DataSource: Sync + Send {
     fn dimensions(&self) -> (usize, usize, usize);
-    fn get_slice(&self, z: usize) -> Cow<'_, [i16]>;
+    fn get_slice<'a>(&'a self, z: usize) -> Cow<'a, [i16]>;
 }
 
 impl DataSource for MrcDataSource {
@@ -27,12 +27,7 @@ impl DataSource for MrcDataSource {
     fn get_slice(&self, z: usize) -> Cow<'_, [i16]> {
         let read_view = self.src.read_view().unwrap();
         let volume = Volume3D::new(read_view);
-        volume
-            .get_slice(z)
-            .unwrap()
-            .iter()
-            .map(|item| *item as i16)
-            .collect()
+        Cow::Borrowed(&volume.get_slice(z).unwrap())
     }
 }
 
@@ -47,16 +42,17 @@ impl DataSource for DmDataSource {
     }
 }
 
-pub fn load_any(path: &Path) -> Result<Box<dyn DataSource + Sync + Send>, Box<dyn Error + Sync + Send>> {
+pub fn load_any(path: &Path) -> Result<Box<dyn DataSource>, Box<dyn Error + Sync + Send>> {
     let ext = path.extension().unwrap().to_str().unwrap().to_lowercase();
-    Ok(if ext == "dm3" || ext == "dm4" {
+    let data: Box<dyn DataSource> = if ext == "dm3" || ext == "dm4" {
         let ds = DMDataSet::load(path)?;
-        let arrs = ds.arrays();
+        let arrs = ds.arrays()?;
         let arr = arrs.first().unwrap();
         Box::new(DmDataSource { src: arr.clone() })
     } else {
         Box::new(MrcDataSource {
             src: MrcMmap::open(path)?,
         })
-    })
+    };
+    Ok(data)
 }
