@@ -9,3 +9,11 @@
 - [ ] maybe have a destination format profile for common target software (peds, xds, ...)
 - [ ] preview: show how dtype conversion affects the output!
 - [ ] display a warning if the conversion is lossy!
+- [ ] clean up decoding in dm3dm4
+- [ ] unwrap -> clean error reporting
+- [ ] get rid of `get_slice_f32`?
+- [ ] for the non-zerocopy path maybe expose iterators in addition to the cow-of-slice-returning API
+    - the idea being that we can .map() a bunch of transforms on top of each other, instead of iterating multiple times
+    - bytes -> chunk by sizeof -> interprete as input dtype -> convert to dest dtype
+    - possible to chain "user payload" on top without much cost
+- [ ] perf: can we have an O(n) quantile approximation?
