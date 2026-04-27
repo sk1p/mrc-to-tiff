@@ -17,3 +17,4 @@
     - bytes -> chunk by sizeof -> interprete as input dtype -> convert to dest dtype
     - possible to chain "user payload" on top without much cost
 - [ ] perf: can we have an O(n) quantile approximation?
+- [ ] publish dm3dm4 on crates.io
