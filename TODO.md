@@ -1,0 +1,11 @@
+- [ ] separate UI for the data loading step
+- [ ] clean up mentions of MRC and make clear that we can support dm3/dm4
+- [ ] read stacks of dm3 files
+    - [ ] need a way to parse the "index axis" from filenames or tags
+    - [ ] see if "a stack of dm3 files" can be represented as a DataSource without changes
+- [ ] allow destination dtype selection (to keep f32 precision)
+- [ ] do something sensible for f32 -> i16 conversion, or don't allow it at all
+- [ ] check if the target software can read f32 files
+- [ ] maybe have a destination format profile for common target software (peds, xds, ...)
+- [ ] preview: show how dtype conversion affects the output!
+- [ ] display a warning if the conversion is lossy!
