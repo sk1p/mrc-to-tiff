@@ -12,7 +12,7 @@ use log::{debug, info};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
-    common::OutputEndianess, datasource::DataSource, write::write_tiff
+    common::OutputEndianess, datasource::{DataSource, load_any}, write::write_tiff
 };
 
 #[derive(Debug)]
@@ -32,8 +32,6 @@ pub fn convert(
     progress_q: Option<Sender<ProgressMessage>>,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let t0 = Instant::now();
-
-    let data = load_any(&mrc_path)?;
 
     let (nx, ny, nz) = data.dimensions();
     info!("dimensions: {nz}x{ny}x{nx}");

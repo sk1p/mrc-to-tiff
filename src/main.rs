@@ -16,7 +16,7 @@ use clap::Parser;
 use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
 use log::{debug, info, warn};
-use mrc::MrcMmap;
+use mrc::MmapReader;
 
 use crate::{common::OutputEndianess, datasource::load_any};
 
@@ -56,13 +56,15 @@ fn string_from_header(
 fn dump_mrc_info(path: &Path) -> Result<(), Box<dyn Error + Sync + Send>> {
     info!("Loading {}...", path.to_string_lossy());
 
-    let data = MrcMmap::open(path)?;
+    let data = MmapReader::open(path.to_str().unwrap())?;
 
     let header = data.header();
 
     let exttyp = header.exttyp_str()?;
 
-    let (nx, ny, nz) = data.read_view()?.dimensions();
+    let shape = data.shape();
+    let (nx, ny, nz) = (shape.nx, shape.ny, shape.nz);
+
     info!("dimensions: {nz}x{ny}x{nx}");
     info!("header: {header:?}");
     info!("exttyp: {exttyp}");
@@ -73,6 +75,7 @@ fn dump_mrc_info(path: &Path) -> Result<(), Box<dyn Error + Sync + Send>> {
             warn!("support for reading FEI1 extra header not implemented");
         }
         "FEI2" => {
+            todo!();
             let extra_header_raw = data.ext_header();
             info!("ext header size: {}", extra_header_raw.len());
 

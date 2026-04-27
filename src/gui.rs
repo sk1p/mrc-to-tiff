@@ -20,7 +20,6 @@ use crate::{
 mod common;
 mod convert;
 mod datasource;
-mod read;
 mod render;
 mod write;
 
@@ -414,7 +413,7 @@ impl ConverterApp {
                 let texture: &egui::TextureHandle = data.texture.get_or_insert_with(|| {
                     info!("loading slice {}", data.slice_position);
                     let img = render_to_rgb(
-                        &data.mmap.get_slice(data.slice_position),
+                        &data.mmap.get_slice_f32(data.slice_position),
                         ny,
                         nx,
                         self.quantile,

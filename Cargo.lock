@@ -903,7 +903,7 @@ dependencies = [
 [[package]]
 name = "dm3dm4"
 version = "0.1.0"
-source = "git+ssh://gitlab@iffgit.fz-juelich.de/clausen/dm3dm4-rs.git?rev=b0ac5d5#b0ac5d5672aed0e6748c97d6e77f49a05b85bf41"
+source = "git+ssh://gitlab@iffgit.fz-juelich.de/clausen/dm3dm4-rs.git?rev=cbdddb8#cbdddb883c086e9651c4877c24887ce02d62b706"
 dependencies = [
  "clap",
  "encoding",
@@ -2103,11 +2103,13 @@ dependencies = [
 
 [[package]]
 name = "mrc"
-version = "0.2.0"
-source = "git+https://github.com/elemeng/mrc.git?rev=cebd1d0#cebd1d074784d0775a01576c8e5b5345ed0a7494"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a23440d94a288fe40a6303db20dc4f7b65b738f8dc3ce57989d0ea2c66c4b05"
 dependencies = [
- "bytemuck",
  "memmap2",
+ "once_cell",
+ "rayon",
  "thiserror 2.0.18",
 ]
 
@@ -2129,6 +2131,8 @@ dependencies = [
  "rfd",
  "thiserror 2.0.18",
  "tiff-encoder",
+ "yoke",
+ "zerocopy",
 ]
 
 [[package]]

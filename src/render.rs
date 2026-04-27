@@ -4,22 +4,17 @@ fn get_quantile(data: &[f32], q: f32) -> f32 {
     let mut data: Vec<f32> = data.to_vec();
     data.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-    let idx_for_q: usize = ((data.len() as f32 * q) as usize).min(data.len() - 1).max(0);
+    let idx_for_q: usize = ((data.len() as f32 * q) as usize).min(data.len() - 1);
 
     data[idx_for_q]
 }
 
-pub fn render_to_rgb(data: &[i16], nx: usize, ny: usize, quantile: f32) -> ColorImage {
-    let (vmin, vmax) = &data.iter().fold((i16::MAX, i16::MIN), |a, &b| {
+pub fn render_to_rgb(data: &[f32], nx: usize, ny: usize, quantile: f32) -> ColorImage {
+    let (vmin, vmax) = &data.iter().fold((f32::MAX, f32::MIN), |a, &b| {
         (a.0.min(b), a.1.max(b))
     });
 
-    let vmin = *vmin as f32;
-    let vmax = *vmax as f32;
-    
-    let data: Vec<f32> = data.iter().map(|v| *v as f32).collect();
-
-    let vmax_quantiled = get_quantile(&data, quantile);
+    let vmax_quantiled = get_quantile(data, quantile);
 
     let normalizer = |(idx, v): (usize, &f32)| (idx, (v - vmin) / (vmax_quantiled - vmin));
 
@@ -33,7 +28,7 @@ pub fn render_to_rgb(data: &[i16], nx: usize, ny: usize, quantile: f32) -> Color
 
     let iter_flat = (0..).zip(data.iter());
 
-    let mapped: Vec<u8> = if vmax_quantiled == vmin {
+    let mapped: Vec<u8> = if vmax_quantiled == *vmin {
         iter_flat.flat_map(to_rgba).collect()
     } else {
         iter_flat

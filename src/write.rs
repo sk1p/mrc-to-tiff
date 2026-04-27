@@ -18,8 +18,9 @@ enum WriteError {
     FileAlreadyExists { path: PathBuf },
 }
 
-trait OutputDtype {
+pub trait OutputDtype {
     const BITS_PER_SAMPLE: u16;
+    const BYTES_PER_SAMPLE: usize;
     const SAMPLE_FORMAT: SampleFormat;
 
     fn write_le(&self, dest: &mut impl WriteBytesExt);
@@ -28,6 +29,8 @@ trait OutputDtype {
 
 impl OutputDtype for u8 {
     const BITS_PER_SAMPLE: u16 = 8;
+
+    const BYTES_PER_SAMPLE: usize = 1;
 
     const SAMPLE_FORMAT: SampleFormat = SampleFormat::UInt;
 
@@ -43,6 +46,8 @@ impl OutputDtype for u8 {
 impl OutputDtype for i8 {
     const BITS_PER_SAMPLE: u16 = 8;
 
+    const BYTES_PER_SAMPLE: usize = 1;
+
     const SAMPLE_FORMAT: SampleFormat = SampleFormat::Int;
 
     fn write_le(&self, dest: &mut impl WriteBytesExt) {
@@ -56,6 +61,8 @@ impl OutputDtype for i8 {
 
 impl OutputDtype for u16 {
     const BITS_PER_SAMPLE: u16 = 16;
+
+    const BYTES_PER_SAMPLE: usize = 2;
 
     const SAMPLE_FORMAT: SampleFormat = SampleFormat::UInt;
 
@@ -71,6 +78,8 @@ impl OutputDtype for u16 {
 impl OutputDtype for i16 {
     const BITS_PER_SAMPLE: u16 = 16;
 
+    const BYTES_PER_SAMPLE: usize = 2;
+
     const SAMPLE_FORMAT: SampleFormat = SampleFormat::Int;
 
     fn write_le(&self, dest: &mut impl WriteBytesExt) {
@@ -85,6 +94,8 @@ impl OutputDtype for i16 {
 impl OutputDtype for u32 {
     const BITS_PER_SAMPLE: u16 = 32;
 
+    const BYTES_PER_SAMPLE: usize = 4;
+
     const SAMPLE_FORMAT: SampleFormat = SampleFormat::UInt;
 
     fn write_le(&self, dest: &mut impl WriteBytesExt) {
@@ -98,6 +109,8 @@ impl OutputDtype for u32 {
 
 impl OutputDtype for i32 {
     const BITS_PER_SAMPLE: u16 = 32;
+
+    const BYTES_PER_SAMPLE: usize = 4;
 
     const SAMPLE_FORMAT: SampleFormat = SampleFormat::Int;
 
@@ -114,6 +127,8 @@ impl OutputDtype for i32 {
 impl OutputDtype for f32 {
     const BITS_PER_SAMPLE: u16 = 32;
 
+    const BYTES_PER_SAMPLE: usize = 4;
+
     const SAMPLE_FORMAT: SampleFormat = SampleFormat::Float;
 
     fn write_le(&self, dest: &mut impl WriteBytesExt) {
@@ -126,7 +141,7 @@ impl OutputDtype for f32 {
 }
 
 #[repr(u16)]
-enum SampleFormat {
+pub enum SampleFormat {
     UInt = 1,
     Int = 2,
     Float = 3,
@@ -151,7 +166,7 @@ where
         }));
     }
 
-    let mut image_bytes: Vec<u8> = Vec::with_capacity(width * height * 2);
+    let mut image_bytes: Vec<u8> = Vec::with_capacity(width * height * T::BYTES_PER_SAMPLE);
     match endianness.for_encoding() {
         tiff_encoder::write::Endianness::MM => {
             for value in data.iter() {

@@ -15,12 +15,14 @@ env_logger = "0.11.9"
 indicatif = { version = "0.18.4", features = ["rayon"] }
 indicatif-log-bridge = "0.2.3"
 log = "0.4.29"
-mrc = { features = ["std", "mmap"], git = "https://github.com/elemeng/mrc.git", rev="cebd1d0" }
-dm3dm4 = { git = "ssh://gitlab@iffgit.fz-juelich.de/clausen/dm3dm4-rs.git", rev="b0ac5d5" }
+mrc = { features = ["std", "mmap"], version = "0.2.3" }
+dm3dm4 = { git = "ssh://gitlab@iffgit.fz-juelich.de/clausen/dm3dm4-rs.git", rev="cbdddb8" }
 rayon = "1.11.0"
 rfd = "0.17.2"
 thiserror = "2.0.18"
 tiff-encoder = "0.3.2"
+yoke = "0.8.2"
+zerocopy = "0.8.48"
 
 
 [[bin]]
