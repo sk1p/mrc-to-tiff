@@ -1,32 +1,28 @@
 use std::{
     error::Error,
-    path::{Path, PathBuf},
-    sync::{Arc, mpsc::{self, Receiver, RecvTimeoutError}},
+    path::PathBuf,
+    sync::{
+        Arc,
+        mpsc::{self, Receiver, RecvTimeoutError},
+    },
     time::Duration,
 };
 
 use clap::Parser;
-use eframe::egui::{self, DragValue, RichText, Slider, Spacing, Style, vec2};
+use eframe::egui::{self, DragValue, RichText, ScrollArea, Slider, Spacing, Style, vec2};
 use egui_plot::{Plot, PlotImage, PlotPoint};
 use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
 use log::{error, info};
 
-use crate::{
-    convert::ProgressMessage,
-    datasource::{DataSource, load_any},
-    render::render_to_rgb,
+use mrc_to_tiff::{
+    common, convert::{self, ProgressMessage}, datasource::{DataSource, load_stack}, render::render_to_rgb
 };
-mod common;
-mod convert;
-mod datasource;
-mod render;
-mod write;
 
 #[derive(Parser, Debug)]
 struct Args {
-    /// Path to the input .mrc file. Must be a 3D stack in 16bit format.
-    mrc_path: Option<PathBuf>,
+    /// Path to the input files (mrc/dm3/dm4). Must be a 3D stack.
+    paths: Option<Vec<PathBuf>>,
 }
 
 const H: f32 = 15.0;
@@ -35,10 +31,19 @@ const V: f32 = 10.0;
 #[derive(Default)]
 struct ConverterApp {
     dest_directory: Option<PathBuf>,
-    input_data: Option<WithInputData>,
     quantile: f32,
     multi: MultiProgress,
-    error_state: Option<String>,
+    state: AppState,
+    error_state: Option<String>, // error is another dimension than main app state
+}
+
+#[derive(Default)]
+enum AppState {
+    #[default]
+    NoData,
+    Convert {
+        data: WithInputData,
+    },
 }
 
 #[derive(Debug)]
@@ -48,8 +53,8 @@ struct BgProgress {
 }
 
 struct WithInputData {
-    source_path: PathBuf,
-    mmap: Arc<Box<dyn DataSource>>,
+    source_paths: Vec<PathBuf>,
+    data_source: Arc<Box<dyn DataSource>>,
     slice_position: usize,
     num_frames: usize,
 
@@ -63,14 +68,16 @@ struct WithInputData {
     background_progress_nums: Option<BgProgress>,
 }
 
-fn load_data(path: &Path) -> Result<WithInputData, Box<dyn Error + Sync + Send>> {
-    let mmap = load_any(path)?;
-    let num_frames = mmap.dimensions().2;
+fn load_data(paths: &[PathBuf]) -> Result<WithInputData, Box<dyn Error + Sync + Send>> {
+    let mut paths = paths.to_vec();
+    paths.sort_by(|p1, p2| natord::compare(&p1.to_string_lossy(), &p2.to_string_lossy()));
+    let data_source = load_stack(&paths)?;
+    let num_frames = data_source.dimensions().nz;
     Ok(WithInputData {
-        source_path: path.to_owned(),
+        source_paths: paths.to_vec(),
         slice_position: 0,
         num_frames,
-        mmap: Arc::new(mmap),
+        data_source: Arc::new(data_source),
         texture: None,
         export_start: 0,
         export_end: num_frames,
@@ -95,10 +102,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         "MRC to TIFF converter",
         options,
         Box::new(|_cc| {
-            let input_data = args.mrc_path.map(|path| load_data(&path).unwrap());
+            let state = args
+                .paths
+                .map(|paths| AppState::Convert {
+                    data: load_data(&paths).unwrap(),
+                })
+                .unwrap_or(AppState::NoData);
             let app = ConverterApp {
+                state,
                 dest_directory: None,
-                input_data,
                 quantile: 0.999,
                 multi,
                 error_state: None,
@@ -136,38 +148,42 @@ impl eframe::App for ConverterApp {
                 });
             });
         } else {
-            if self.input_data.is_some() {
-                self.render_with_data(ctx, frame);
-            } else {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                        let load_btn =
-                            egui::Button::new(RichText::new("Load 3D MRC stack...").strong());
-                        let load_btn = load_btn.fill(egui::Color32::from_rgb(0, 90, 230));
-
-                        if ui.add(load_btn).clicked()
-                            && let Some(new_path) = self.pick_file()
-                        {
-                            self.input_data = match load_data(&new_path) {
-                                Ok(data) => Some(data),
-                                Err(err) => {
-                                    self.error_state = Some(format!("Error loading data: {}", err));
-                                    None
-                                }
-                            }
-                        }
-                    })
-                });
+            match &mut self.state {
+                AppState::NoData => self.render_no_data(ctx),
+                AppState::Convert { data: _ } => self.render_with_data(ctx, frame),
             }
         }
     }
 }
 
 impl ConverterApp {
-    fn pick_file(&self) -> Option<PathBuf> {
+    fn pick_files(&self) -> Option<Vec<PathBuf>> {
         rfd::FileDialog::new()
+            .add_filter("All supported", &["mrc", "dm3", "dm4"])
             .add_filter("MRC", &["mrc"])
-            .pick_file()
+            .add_filter("DM3/DM4", &["dm3", "dm4"])
+            .pick_files()
+    }
+
+    fn render_no_data(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                let load_btn = egui::Button::new(RichText::new("Open 3D stack...").strong());
+                let load_btn = load_btn.fill(egui::Color32::from_rgb(0, 90, 230));
+
+                if ui.add(load_btn).clicked()
+                    && let Some(new_paths) = self.pick_files()
+                {
+                    self.state = match load_data(&new_paths) {
+                        Ok(data) => AppState::Convert { data },
+                        Err(err) => {
+                            self.error_state = Some(format!("Error loading data: {}", err));
+                            AppState::NoData
+                        }
+                    }
+                }
+            })
+        });
     }
 
     fn render_with_data(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -177,7 +193,7 @@ impl ConverterApp {
         )
         .frame(egui::containers::Frame::new().inner_margin(vec2(H, V)))
         .show(ctx, |ui| {
-            if let Some(data) = &mut self.input_data {
+            if let AppState::Convert { data } = &mut self.state {
                 ui.set_min_width(256.0);
                 // 1-indexed position in the UI:
                 let mut slider_value = data.slice_position + 1;
@@ -205,28 +221,36 @@ impl ConverterApp {
             }
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            if ui.button("Load 3D MRC Stack...").clicked()
-                && let Some(new_path) = self.pick_file()
+            if ui.button("Load 3D stack...").clicked()
+                && let Some(new_paths) = self.pick_files()
             {
-                self.input_data = match load_data(&new_path) {
-                    Ok(data) => Some(data),
+                self.state = match load_data(&new_paths) {
+                    Ok(data) => AppState::Convert { data },
                     Err(err) => {
                         self.error_state = Some(err.to_string());
-                        None
+                        AppState::NoData
                     }
                 }
             }
+
+            if let AppState::Convert { data } = &mut self.state {
+                ui.label("Input path");
+                ScrollArea::vertical().max_height(100.0).show(ui, |ui| {
+                    for p in &data.source_paths {
+                        ui.monospace(p.to_string_lossy());
+                    }
+                });
+            }
+
             egui::Grid::new("parameter grid")
                 .num_columns(2)
                 .striped(true)
                 .show(ui, |ui| {
-                    if let Some(data) = &mut self.input_data {
-                        let (nx, ny, nz) = data.mmap.dimensions();
-                        ui.label("Input path");
-                        ui.monospace(data.source_path.to_string_lossy());
-                        ui.end_row();
-                        ui.label("Input size");
-                        ui.monospace(format!("{nz}x{ny}x{nx}"));
+                    if let AppState::Convert { data } = &mut self.state {
+                        let dims = data.data_source.dimensions();
+
+                        ui.label("Input size (z, y, x)");
+                        ui.monospace(format!("{}x{}x{}", dims.nz, dims.ny, dims.nx));
                         ui.end_row();
 
                         ui.separator();
@@ -332,7 +356,7 @@ impl ConverterApp {
                                 let export_start = data.export_start;
                                 let export_end = data.export_end;
 
-                                let bg_data = Arc::clone(&data.mmap);
+                                let bg_data = Arc::clone(&data.data_source);
 
                                 std::thread::spawn(move || {
                                     if let Err(e) = convert::convert(
@@ -407,15 +431,17 @@ impl ConverterApp {
                     }
                 });
 
-            if let Some(data) = &mut self.input_data {
-                let (nx, ny, _nz) = data.mmap.dimensions();
+            if let AppState::Convert { data } = &mut self.state {
+                let dims = data.data_source.dimensions();
+                let nx = dims.nx;
+                let ny = dims.ny;
 
                 let texture: &egui::TextureHandle = data.texture.get_or_insert_with(|| {
                     info!("loading slice {}", data.slice_position);
                     let img = render_to_rgb(
-                        &data.mmap.get_slice_f32(data.slice_position),
-                        ny,
+                        &data.data_source.get_slice_f32(data.slice_position),
                         nx,
+                        ny,
                         self.quantile,
                     );
                     ui.ctx()
@@ -424,7 +450,7 @@ impl ConverterApp {
                 let plot = Plot::new("preview").data_aspect(1.0);
                 plot.show(ui, |plot_ui| {
                     let center_position = PlotPoint::new(0.5, 0.5);
-                    let aspect_ratio = ny as f32 / nx as f32;
+                    let aspect_ratio = nx as f32 / ny as f32;
                     let image = PlotImage::new(
                         "preview_image",
                         texture,

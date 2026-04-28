@@ -1,29 +1,20 @@
-mod common;
-mod convert;
-mod read;
-mod render;
-mod write;
-mod datasource;
-
 use std::{
     error::Error,
-    io::{Cursor, Seek},
     path::{Path, PathBuf}, sync::Arc,
 };
 
-use byteorder::{LittleEndian, ReadBytesExt};
 use clap::Parser;
 use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
-use log::{debug, info, warn};
+use log::{info, warn};
 use mrc::MmapReader;
 
-use crate::{common::OutputEndianess, datasource::load_any};
+use mrc_to_tiff::{common::OutputEndianess, convert, datasource::load_stack};
 
 #[derive(Parser, Debug)]
 struct Args {
-    /// Path to the input .mrc file. Must be a 3D stack in 16bit format.
-    mrc_path: PathBuf,
+    /// Path to the input files (mrc/dm3/dm4). Must be a 3D stack.
+    paths: Vec<PathBuf>,
 
     /// Destination path, should be an existing directory.
     dest_path: PathBuf,
@@ -76,6 +67,7 @@ fn dump_mrc_info(path: &Path) -> Result<(), Box<dyn Error + Sync + Send>> {
         }
         "FEI2" => {
             todo!();
+            /*
             let extra_header_raw = data.ext_header();
             info!("ext header size: {}", extra_header_raw.len());
 
@@ -196,6 +188,7 @@ fn dump_mrc_info(path: &Path) -> Result<(), Box<dyn Error + Sync + Send>> {
             info!("end tilt angle: {end_tilt_angle_deg}deg");
             info!("tilt per image: {tilt_per_image_deg}deg");
             info!("tilt speed: {tilt_speed_deg_s}deg/s");
+            */
         },
         typ => {
             warn!("unknown ext header type: {typ}");
@@ -214,9 +207,12 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
     let args = Args::parse();
 
     if args.info_only {
-        dump_mrc_info(&args.mrc_path)?;
+        for path in &args.paths {
+            println!("dumping info for {path:?}...");
+            dump_mrc_info(path)?;
+        }
     } else {
-        let input_data = Arc::new(load_any(&args.mrc_path)?);
+        let input_data = Arc::new(load_stack(&args.paths)?);
         convert::convert(
             Arc::clone(&input_data),
             args.dest_path,

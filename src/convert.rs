@@ -2,7 +2,9 @@ use std::{
     error::Error,
     path::PathBuf,
     sync::{
-        Arc, atomic::{AtomicUsize, Ordering}, mpsc::Sender
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+        mpsc::Sender,
     },
     time::Instant,
 };
@@ -11,9 +13,7 @@ use indicatif::{MultiProgress, ParallelProgressIterator, ProgressBar};
 use log::{debug, info};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use crate::{
-    common::OutputEndianess, datasource::{DataSource, load_any}, write::write_tiff
-};
+use crate::{common::OutputEndianess, datasource::DataSource, write::write_tiff};
 
 #[derive(Debug)]
 pub enum ProgressMessage {
@@ -23,17 +23,19 @@ pub enum ProgressMessage {
 }
 
 pub fn convert(
-    data: Arc<Box<dyn DataSource>>,    // 3d, 16bit
-    dest_path: PathBuf,           // directory
-    endianess: OutputEndianess,      // tif output endianess
-    start_at_frame: usize,        // 1-indexed
-    stop_at_frame: Option<usize>, // 1-indexed, last frame if not given
+    data: Arc<Box<dyn DataSource>>, // 3d, 16bit
+    dest_path: PathBuf,             // directory
+    endianess: OutputEndianess,     // tif output endianess
+    start_at_frame: usize,          // 1-indexed
+    stop_at_frame: Option<usize>,   // 1-indexed, last frame if not given
     multi_progress: &MultiProgress,
     progress_q: Option<Sender<ProgressMessage>>,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let t0 = Instant::now();
-
-    let (nx, ny, nz) = data.dimensions();
+    let dims = data.dimensions();
+    let nx = dims.nx;
+    let ny = dims.ny;
+    let nz = dims.nz;
     info!("dimensions: {nz}x{ny}x{nx}");
 
     info!("endianess: {:?}", endianess);
@@ -60,11 +62,10 @@ pub fn convert(
             write_tiff(&out_path, &slice, nx, ny, endianess)?;
             done.fetch_add(1, Ordering::SeqCst);
             if let Some(prog_q) = &progress_q {
-                prog_q
-                    .send(ProgressMessage::InProgress {
-                        num_done: done.load(Ordering::SeqCst),
-                        total: len as usize,
-                    })?;
+                prog_q.send(ProgressMessage::InProgress {
+                    num_done: done.load(Ordering::SeqCst),
+                    total: len as usize,
+                })?;
             }
             debug!("created {out_path:?}");
             Ok(())

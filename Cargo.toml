@@ -23,6 +23,10 @@ thiserror = "2.0.18"
 tiff-encoder = "0.3.2"
 yoke = "0.8.2"
 zerocopy = "0.8.48"
+edit-distance = "2.2.2"
+natord = "1.0.9"
+pdqselect = "0.1.1"
+rand = "0.10.1"
 
 
 [[bin]]
@@ -32,3 +36,15 @@ path = "src/main.rs"
 [[bin]]
 name = "mrc-to-tiff-gui"
 path = "src/gui.rs"
+
+[lib]
+name = "mrc_to_tiff"
+path = "src/lib.rs"
+
+[dev-dependencies]
+criterion = "0.8.2"
+rand = "0.10.1"
+
+[[bench]]
+name = "render_benchmarks"
+harness = false

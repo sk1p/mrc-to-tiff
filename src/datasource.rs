@@ -1,4 +1,10 @@
-use std::{borrow::Cow, error::Error, path::Path};
+use std::{
+    borrow::Cow,
+    collections::HashSet,
+    error::Error,
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
 use dm3dm4::dataset::{DMArray, DMDataSet};
 use log::info;
@@ -13,16 +19,26 @@ pub struct DmDataSource {
     pub src: DMArray,
 }
 
+pub struct Shape3 {
+    pub nx: usize,
+    pub ny: usize,
+    pub nz: usize,
+}
+
 pub trait DataSource: Sync + Send {
-    fn dimensions(&self) -> (usize, usize, usize);
+    fn dimensions(&self) -> Shape3;
     fn get_slice<'a>(&'a self, z: usize) -> Cow<'a, [i16]>;
     fn get_slice_f32(&self, z: usize) -> Cow<'_, [f32]>;
 }
 
 impl DataSource for MrcDataSource {
-    fn dimensions(&self) -> (usize, usize, usize) {
+    fn dimensions(&self) -> Shape3 {
         let s = self.src.shape();
-        (s.nx, s.ny, s.nz)
+        Shape3 {
+            nx: s.nx,
+            ny: s.ny,
+            nz: s.nz,
+        }
     }
 
     fn get_slice(&self, z: usize) -> Cow<'_, [i16]> {
@@ -91,9 +107,21 @@ impl DataSource for MrcDataSource {
 }
 
 impl DataSource for DmDataSource {
-    fn dimensions(&self) -> (usize, usize, usize) {
+    fn dimensions(&self) -> Shape3 {
         let raw_shape = self.src.shape();
-        (raw_shape[0], raw_shape[1], raw_shape[2])
+        if raw_shape.len() == 2 {
+            Shape3 {
+                nx: raw_shape[1],
+                ny: raw_shape[0],
+                nz: 1,
+            }
+        } else {
+            Shape3 {
+                nx: raw_shape[1],
+                ny: raw_shape[0],
+                nz: raw_shape[2],
+            }
+        }
     }
 
     fn get_slice(&self, z: usize) -> Cow<'_, [i16]> {
@@ -226,7 +254,7 @@ impl DataSource for DmDataSource {
     }
 }
 
-pub fn load_any(path: &Path) -> Result<Box<dyn DataSource>, Box<dyn Error + Sync + Send>> {
+pub fn load_one(path: &Path) -> Result<Box<dyn DataSource>, Box<dyn Error + Sync + Send>> {
     let ext = path.extension().unwrap().to_str().unwrap().to_lowercase();
     let data: Box<dyn DataSource> = if ext == "dm3" || ext == "dm4" {
         let ds = DMDataSet::load(path)?;
@@ -239,4 +267,94 @@ pub fn load_any(path: &Path) -> Result<Box<dyn DataSource>, Box<dyn Error + Sync
         })
     };
     Ok(data)
+}
+
+pub fn load_stack(
+    paths: &[PathBuf],
+) -> Result<Box<dyn DataSource>, Box<dyn Error + Sync + Send>> {
+    let res: Result<Vec<Box<dyn DataSource>>, Box<dyn Error + Send + Sync>> =
+        paths.iter().map(|p| load_one(p)).collect();
+    Ok(Box::new(StackOfData::new(res?)?))
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum StackError {
+    #[error("dimensions mismatch: shapes of all files must be compatible ({0})")]
+    DimensionsMismatch(String),
+}
+
+pub struct StackOfData {
+    data_sources: Vec<(Box<dyn DataSource>, Range<usize>)>,
+}
+
+impl StackOfData {
+    fn new(inner_sources: Vec<Box<dyn DataSource>>) -> Result<Self, StackError> {
+        let dims = inner_sources
+            .iter()
+            .map(|s| s.dimensions())
+            .collect::<Vec<_>>();
+
+        // make sure the dimensions of the selected files match:
+        let unique_x_y = dims
+            .iter()
+            .map(|d| (d.nx, d.ny))
+            .collect::<HashSet<(usize, usize)>>();
+        if unique_x_y.len() > 1 {
+            let msg = unique_x_y
+                .iter()
+                .map(|(w, h)| format!("{w}x{h}"))
+                .collect::<Vec<String>>()
+                .join(", ");
+            return Err(StackError::DimensionsMismatch(format!(
+                "have dimensions: {}",
+                msg
+            )));
+        }
+
+        let mut abs_ranges: Vec<Range<usize>> = Vec::new();
+        let mut offset: usize = 0;
+        for ds in inner_sources.iter() {
+            abs_ranges.push(offset..offset + ds.dimensions().nz);
+            offset += ds.dimensions().nz;
+        }
+
+        Ok(Self {
+            data_sources: inner_sources
+                .into_iter()
+                .zip(abs_ranges)
+                .collect(),
+        })
+    }
+}
+
+impl DataSource for StackOfData {
+    fn dimensions(&self) -> Shape3 {
+        let first = self.data_sources.first().expect("nonempty").0.dimensions();
+        let nz = self.data_sources.iter().map(|ds| ds.0.dimensions().nz).sum();
+        Shape3 {
+            nx: first.nx,
+            ny: first.ny,
+            nz,
+        }
+    }
+
+    fn get_slice<'a>(&'a self, z: usize) -> Cow<'a, [i16]> {
+        // map z into the correct file in the stack:
+        for (ds, range) in &self.data_sources {
+            if range.contains(&z) {
+                return ds.get_slice(z - range.start)
+            }
+        }
+        todo!("index out of bounds")
+    }
+
+    fn get_slice_f32(&self, z: usize) -> Cow<'_, [f32]> {
+        // map z into the correct file in the stack:
+        for (ds, range) in &self.data_sources {
+            if range.contains(&z) {
+                return ds.get_slice_f32(z - range.start)
+            }
+        }
+        todo!("index out of bounds")
+    }
 }
